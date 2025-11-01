@@ -1,14 +1,15 @@
 import JSZip from "jszip";
 import FileSaver from 'file-saver';
-import FPS from 'fps-now';
 
 import { BlueprintJS } from './scripts/blueprint.js';
-import { EVENT_LOADED, EVENT_NOTHING_2D_SELECTED, EVENT_CORNER_2D_CLICKED, EVENT_WALL_2D_CLICKED, 
-    EVENT_ROOM_2D_CLICKED, EVENT_WALL_CLICKED, EVENT_ROOM_CLICKED, EVENT_NO_ITEM_SELECTED, 
-    EVENT_ITEM_SELECTED, EVENT_GLTF_READY } from './scripts/core/events.js';
+import {
+    EVENT_LOADED, EVENT_NOTHING_2D_SELECTED, EVENT_CORNER_2D_CLICKED, EVENT_WALL_2D_CLICKED,
+    EVENT_ROOM_2D_CLICKED, EVENT_WALL_CLICKED, EVENT_ROOM_CLICKED, EVENT_NO_ITEM_SELECTED,
+    EVENT_ITEM_SELECTED, EVENT_GLTF_READY
+} from './scripts/core/events.js';
 import { Configuration, configDimUnit, viewBounds, itemStatistics } from './scripts/core/configuration.js';
 import { availableDimUnits, dimMeter, TEXTURE_NO_PREVIEW } from './scripts/core/constants.js';
-import QuickSettings from 'quicksettings';
+import * as QuickSettings from './bootstrap-ui.js';
 
 import { Dimensioning } from './scripts/core/dimensioning.js';
 import { ParametricsInterface } from './scripts/ParametricsInterface.js';
@@ -17,15 +18,8 @@ import * as floor_textures_json from './floor_textures.json';
 import * as wall_textures_json from './wall_textures.json';
 import * as default_room_json from './design.json';
 
-const fps = FPS.of({x: 0, y: 0});
-fps.start();
-
-
 let default_room = JSON.stringify(default_room_json);
-let startY = 0;
-let panelWidths = 200;
-let uxInterfaceHeight = 450;
-let subPanelsHeight = 460;
+
 let floor_textures = floor_textures_json;//['default'];
 let floor_texture_keys = Object.keys(floor_textures);
 
@@ -51,6 +45,7 @@ let settingsSelectedWall3D = null;
 
 let settingsViewer3d = null;
 let uxInterface = null;
+let materialSettings = null;
 
 let parametricContextInterface = null;
 let doorsData = {
@@ -69,8 +64,8 @@ let opts = {
             'corner-radius': 12.5,
             'boundary-point-radius': 5.0,
             'boundary-line-thickness': 2.0,
-            'boundary-point-color':'#030303',
-            'boundary-line-color':'#090909',
+            'boundary-point-color': '#030303',
+            'boundary-line-color': '#090909',
             pannable: true,
             zoomable: true,
             scale: false,
@@ -89,7 +84,7 @@ let opts = {
     },
     viewer3d: {
         id: 'bp3djs-viewer3d',
-        viewer3dOptions:{
+        viewer3dOptions: {
             occludedWalls: false,
             occludedRoofs: false
         }
@@ -100,46 +95,49 @@ let opts = {
 };
 
 function selectFloorTexture(data) {
-    if (!data.index) {
-        data = settingsSelectedRoom3D.getValue('Floor Textures');
+    let floor_texture_pack;
+
+    if (data.texture) {
+        // Called from texture grid
+        floor_texture_pack = data.texture;
+    } else {
+        // Fallback for other calls
+        floor_texture_pack = floor_textures[data.value];
     }
-    let floor_texture_pack = floor_textures[data.value];
-    if(floor_texture_pack.colormap){
-        settingsSelectedRoom3D.setValue('Floor Texture:', floor_texture_pack.colormap);
+
+    if (floor_texture_pack) {
+        // Apply to all rooms by default
+        roomplanningHelper.roomTexturePack = floor_texture_pack;
+        console.log('Applied floor texture to all rooms:', data.value || 'unknown');
+
+        // Also update the selection-specific controls if they exist
+        if (settingsSelectedRoom3D && !settingsSelectedRoom3D.hidden) {
+            roomplanningHelper.roomTexturePack = floor_texture_pack;
+        }
     }
-    else{
-        settingsSelectedRoom3D.setValue('Floor Texture:', TEXTURE_NO_PREVIEW);
-    }
-    roomplanningHelper.roomTexturePack = floor_texture_pack;
 }
 
 function selectWallTexture(data) {
-    if (!data.index) {
-        if (settingsSelectedWall3D._hidden && !settingsSelectedRoom3D._hidden) {
-            data = settingsSelectedRoom3D.getValue('All Wall Textures');
-        } else {
-            data = settingsSelectedWall3D.getValue('Wall Textures');
-        }
+    let wall_texture_pack;
 
-    }
-    let wall_texture_pack = wall_textures[data.value];
-    let colormap = wall_texture_pack.colormap;
-    if (settingsSelectedWall3D._hidden && !settingsSelectedRoom3D._hidden) {
-        if(colormap){
-            settingsSelectedRoom3D.setValue('All Wall Texture:', colormap);
-        } 
-        else{
-            settingsSelectedRoom3D.setValue('All Wall Texture:', TEXTURE_NO_PREVIEW);
-        }
-        roomplanningHelper.roomWallsTexturePack = wall_texture_pack;
+    if (data.texture) {
+        // Called from texture grid
+        wall_texture_pack = data.texture;
     } else {
-        if(colormap){
-            settingsSelectedWall3D.setValue('Wall Texture:', wall_texture_pack.colormap);
-        }  
-        else{
-            settingsSelectedWall3D.setValue('Wall Texture:', TEXTURE_NO_PREVIEW);
-        }      
-        roomplanningHelper.wallTexturePack = wall_texture_pack;
+        // Fallback for other calls
+        wall_texture_pack = wall_textures[data.value];
+    }
+
+    if (wall_texture_pack) {
+        // Apply to all walls by default when using the main materials panel
+        roomplanningHelper.roomWallsTexturePack = wall_texture_pack;
+        console.log('Applied wall texture to all walls:', data.value || 'unknown');
+
+        // Also apply to individual wall if one is selected
+        if (settingsSelectedWall3D && !settingsSelectedWall3D.hidden) {
+            roomplanningHelper.wallTexturePack = wall_texture_pack;
+            console.log('Also applied to selected wall');
+        }
     }
 }
 
@@ -148,11 +146,11 @@ function selectFloorTextureColor(data) {
     roomplanningHelper.setRoomFloorColor(data);
 }
 
-function selectWallTextureColor(data) {   
-    
+function selectWallTextureColor(data) {
+
     if (settingsSelectedWall3D._hidden && !settingsSelectedRoom3D._hidden) {
         roomplanningHelper.setRoomWallsTextureColor(data);
-    } 
+    }
     else {
         roomplanningHelper.setWallColor(data);
     }
@@ -160,22 +158,27 @@ function selectWallTextureColor(data) {
 
 function selectDoorForWall(data) {
     if (!data.index) {
-        data = settingsSelectedWall3D.getValue('Select Door');
+        data = settingsSelectedWall3D.getValue('Door Type');
     }
     let selectedDoor = doorsData[data.value];
-    settingsSelectedWall3D.setValue('Door Preview:', selectedDoor.src);
+    settingsSelectedWall3D.setValue('Door Preview', selectedDoor.src);
 }
 
 function addDoorForWall() {
-    let data = settingsSelectedWall3D.getValue('Select Door');
+    let data = settingsSelectedWall3D.getValue('Door Type');
     let selectedDoor = doorsData[data.value];
     roomplanningHelper.addParametricDoorToCurrentWall(selectedDoor.type);
+    console.log('Added door type:', selectedDoor.type);
 }
 
 function switchViewer() {
     blueprint3d.switchView();
+    const currentViewEl = document.getElementById('current-view');
+    const switchBtn = document.getElementById('switch-view-btn');
+
     if (blueprint3d.currentView === 2) {
-        uxInterface.setValue("Current View", "Floor Planning");
+        currentViewEl.textContent = "Floor Planning";
+        switchBtn.textContent = "Switch to 3D";
         settingsViewer3d.hide();
         settingsViewer2d.show();
 
@@ -187,7 +190,8 @@ function switchViewer() {
         }
 
     } else if (blueprint3d.currentView === 3) {
-        uxInterface.setValue("Current View", "Room Planning");
+        currentViewEl.textContent = "3D Room Planning";
+        switchBtn.textContent = "Switch to 2D";
         settingsViewer2d.hide();
         settingsSelectedCorner.hide();
         settingsSelectedWall.hide();
@@ -210,7 +214,7 @@ function switchViewer2DToTransform() {
 
 function loadBlueprint3DDesign(filedata) {
     let reader = new FileReader();
-    reader.onload = function(event) {
+    reader.onload = function (event) {
         let data = event.target.result;
         blueprint3d.model.loadSerialized(data);
     };
@@ -219,7 +223,7 @@ function loadBlueprint3DDesign(filedata) {
 
 function loadLockedBlueprint3DDesign(filedata) {
     let reader = new FileReader();
-    reader.onload = function(event) {
+    reader.onload = function (event) {
         let data = event.target.result;
         blueprint3d.model.loadLockedSerialized(data);
     };
@@ -327,7 +331,7 @@ function exportDesignAsPackage() {
         });
         zip.file(model_path, gltfBlob); //, { base64: false }); //, { base64: true }
     }
-    zip.generateAsync({ type: "blob" }).then(function(content) {
+    zip.generateAsync({ type: "blob" }).then(function (content) {
         FileSaver.saveAs(content, "YourBlueprintProject.zip");
     });
 
@@ -354,35 +358,35 @@ configurationHelper = blueprint3d.configurationHelper;
 floorplanningHelper = blueprint3d.floorplanningHelper;
 roomplanningHelper = blueprint3d.roomplanningHelper;
 
-blueprint3d.model.addEventListener(EVENT_LOADED, function() { console.log('LOAD SERIALIZED JSON ::: '); });
-blueprint3d.floorplanner.addFloorplanListener(EVENT_NOTHING_2D_SELECTED, function() {
+blueprint3d.model.addEventListener(EVENT_LOADED, function () { console.log('LOAD SERIALIZED JSON ::: '); });
+blueprint3d.floorplanner.addFloorplanListener(EVENT_NOTHING_2D_SELECTED, function () {
     settingsSelectedCorner.hide();
     settingsSelectedWall.hide();
     settingsSelectedRoom.hide();
     settingsViewer2d.hideControl('Delete');
 });
-blueprint3d.floorplanner.addFloorplanListener(EVENT_CORNER_2D_CLICKED, function(evt) {
+blueprint3d.floorplanner.addFloorplanListener(EVENT_CORNER_2D_CLICKED, function (evt) {
     settingsSelectedCorner.show();
     settingsSelectedWall.hide();
     settingsSelectedRoom.hide();
     settingsViewer2d.showControl('Delete');
     settingsSelectedCorner.setValue('cornerElevation', Dimensioning.cmToMeasureRaw(evt.item.elevation));
 });
-blueprint3d.floorplanner.addFloorplanListener(EVENT_WALL_2D_CLICKED, function(evt) {
+blueprint3d.floorplanner.addFloorplanListener(EVENT_WALL_2D_CLICKED, function (evt) {
     settingsSelectedCorner.hide();
     settingsSelectedWall.show();
     settingsSelectedRoom.hide();
     settingsViewer2d.showControl('Delete');
     settingsSelectedWall.setValue('wallThickness', Dimensioning.cmToMeasureRaw(evt.item.thickness));
 });
-blueprint3d.floorplanner.addFloorplanListener(EVENT_ROOM_2D_CLICKED, function(evt) {
+blueprint3d.floorplanner.addFloorplanListener(EVENT_ROOM_2D_CLICKED, function (evt) {
     settingsSelectedCorner.hide();
     settingsSelectedWall.hide();
     settingsSelectedRoom.show();
     settingsSelectedRoom.setValue('roomName', evt.item.name);
 });
 
-blueprint3d.roomplanner.addRoomplanListener(EVENT_ITEM_SELECTED, function(evt) {
+blueprint3d.roomplanner.addRoomplanListener(EVENT_ITEM_SELECTED, function (evt) {
     settingsSelectedWall3D.hide();
     settingsSelectedRoom3D.hide();
     let itemModel = evt.itemModel;
@@ -395,7 +399,7 @@ blueprint3d.roomplanner.addRoomplanListener(EVENT_ITEM_SELECTED, function(evt) {
     }
 });
 
-blueprint3d.roomplanner.addRoomplanListener(EVENT_NO_ITEM_SELECTED, function() {
+blueprint3d.roomplanner.addRoomplanListener(EVENT_NO_ITEM_SELECTED, function () {
     settingsSelectedWall3D.hide();
     settingsSelectedRoom3D.hide();
     if (parametricContextInterface) {
@@ -403,7 +407,7 @@ blueprint3d.roomplanner.addRoomplanListener(EVENT_NO_ITEM_SELECTED, function() {
         parametricContextInterface = null;
     }
 });
-blueprint3d.roomplanner.addRoomplanListener(EVENT_WALL_CLICKED, function(evt) {
+blueprint3d.roomplanner.addRoomplanListener(EVENT_WALL_CLICKED, function (evt) {
     settingsSelectedWall3D.show();
     settingsSelectedRoom3D.hide();
     if (parametricContextInterface) {
@@ -411,7 +415,7 @@ blueprint3d.roomplanner.addRoomplanListener(EVENT_WALL_CLICKED, function(evt) {
         parametricContextInterface = null;
     }
 });
-blueprint3d.roomplanner.addRoomplanListener(EVENT_ROOM_CLICKED, function(evt) {
+blueprint3d.roomplanner.addRoomplanListener(EVENT_ROOM_CLICKED, function (evt) {
     settingsSelectedWall3D.hide();
     settingsSelectedRoom3D.show();
     if (parametricContextInterface) {
@@ -419,7 +423,7 @@ blueprint3d.roomplanner.addRoomplanListener(EVENT_ROOM_CLICKED, function(evt) {
         parametricContextInterface = null;
     }
 });
-blueprint3d.roomplanner.addRoomplanListener(EVENT_GLTF_READY, function(evt) {
+blueprint3d.roomplanner.addRoomplanListener(EVENT_GLTF_READY, function (evt) {
     let data = evt.gltf;
     let a = window.document.createElement('a');
     let blob = new Blob([data], { type: 'text' });
@@ -435,34 +439,58 @@ blueprint3d.model.loadSerialized(default_room);
 
 
 if (!opts.widget) {
-    uxInterface = QuickSettings.create(0, 0, 'BlueprintJS', app_parent);
+    // Setup navbar event listeners
+    document.getElementById('switch-view-btn').onclick = switchViewer;
+    document.getElementById('save-btn').onclick = saveBlueprint3DDesign;
+    document.getElementById('export-btn').onclick = saveBlueprint3D;
 
-    settingsViewer2d = QuickSettings.create(0, 0, 'Viewer 2D', app_parent);
-    settingsSelectedCorner = QuickSettings.create(0, 0, 'Corner', app_parent);
-    settingsSelectedWall = QuickSettings.create(0, 0, 'Wall', app_parent);
-    settingsSelectedRoom = QuickSettings.create(0, 0, 'Room', app_parent);
+    uxInterface = QuickSettings.create(0, 0, 'Project', document.getElementById('main-controls'));
 
-    settingsViewer3d = QuickSettings.create(0, 0, 'Viewer 3D', app_parent);
-    settingsSelectedWall3D = QuickSettings.create(0, 0, 'Wall', app_parent);
-    settingsSelectedRoom3D = QuickSettings.create(0, 0, 'Room', app_parent);
+    // Always visible materials panel
+    materialSettings = QuickSettings.create(0, 0, 'Materials & Textures', document.getElementById('main-controls'));
+
+    settingsViewer2d = QuickSettings.create(0, 0, '2D Controls', document.getElementById('viewer-controls'));
+    settingsSelectedCorner = QuickSettings.create(0, 0, 'Corner Properties', document.getElementById('selection-controls'));
+    settingsSelectedWall = QuickSettings.create(0, 0, 'Wall Properties', document.getElementById('selection-controls'));
+    settingsSelectedRoom = QuickSettings.create(0, 0, 'Room Properties', document.getElementById('selection-controls'));
+
+    settingsViewer3d = QuickSettings.create(0, 0, '3D Controls', document.getElementById('viewer-controls'));
+    settingsSelectedWall3D = QuickSettings.create(0, 0, 'Wall Materials', document.getElementById('selection-controls'));
+    settingsSelectedRoom3D = QuickSettings.create(0, 0, 'Room Materials', document.getElementById('selection-controls'));
 
 
-    uxInterface.addButton('Switch Viewer', switchViewer);
-    uxInterface.addHTML('Current View', 'Floorplanning');
-
-    uxInterface.bindDropDown('configDimUnit', availableDimUnits, configurationHelper);
-
-
+    uxInterface.bindDropDown('Units', availableDimUnits, configurationHelper);
     uxInterface.addFileChooser("Load Design", "Load Design", ".blueprint3d", loadBlueprint3DDesign);
-    uxInterface.addButton('Save Design', saveBlueprint3DDesign);
-    uxInterface.addButton('Export as GLTF', saveBlueprint3D);
-    uxInterface.addButton('Export Project (blueprint-py)', exportDesignAsPackage);
-    uxInterface.addButton('Reset', blueprint3d.model.reset.bind(blueprint3d.model));
+    uxInterface.addButton('Export Project', exportDesignAsPackage);
+    uxInterface.addButton('Reset Design', blueprint3d.model.reset.bind(blueprint3d.model));
 
-    settingsViewer2d.addButton('Draw Mode', switchViewer2DToDraw);
-    settingsViewer2d.addButton('Move Mode', switchViewer2DToMove);
+    // Add always-visible texture controls
+    materialSettings.addHTML('Quick Apply', '<p><strong>Apply materials to your design:</strong></p><p>• Floor textures apply to all rooms</p><p>• Wall textures apply to all walls</p><p>• Switch to 3D view to see changes</p>');
+
+    materialSettings.addTextureGrid('Floor Textures', floor_textures, (data) => {
+        selectFloorTexture(data);
+    });
+    materialSettings.addColor('Floor Color Tint', floor_textures[floor_texture_keys[0]].color || '#FFFFFF', selectFloorTextureColor);
+
+    materialSettings.addTextureGrid('Wall Textures', wall_textures, (data) => {
+        selectWallTexture(data);
+    });
+    materialSettings.addColor('Wall Color Tint', wall_textures[wall_texture_keys[0]].color || '#FFFFFF', selectWallTextureColor);
+
+    materialSettings.addDropDown('Door Type', doorTypes, selectDoorForWall);
+    materialSettings.addImage('Door Preview', doorsData[doorTypes[0]].src, null);
+    materialSettings.addButton('Add Door to Selected Wall', addDoorForWall);
+
+    settingsViewer2d.addModeButtons('Drawing Mode', [
+        { label: 'Draw', value: 'draw' },
+        { label: 'Move', value: 'move' }
+    ], (mode) => {
+        if (mode === 'draw') switchViewer2DToDraw();
+        else if (mode === 'move') switchViewer2DToMove();
+    });
+
     settingsViewer2d.addButton('Transform Mode', switchViewer2DToTransform);
-    settingsViewer2d.addButton('Delete', floorplanningHelper.deleteCurrentItem.bind(floorplanningHelper));
+    settingsViewer2d.addButton('Delete Selected', floorplanningHelper.deleteCurrentItem.bind(floorplanningHelper));
 
     settingsViewer2d.bindBoolean('snapToGrid', configurationHelper.snapToGrid, configurationHelper);
     settingsViewer2d.bindBoolean('directionalDrag', configurationHelper.directionalDrag, configurationHelper);
@@ -478,46 +506,32 @@ if (!opts.widget) {
     settingsSelectedWall.bindRange('wallThickness', 0.2, 1, floorplanningHelper.wallThickness, 0.01, floorplanningHelper);
     settingsSelectedRoom.bindText('roomName', floorplanningHelper.roomName, floorplanningHelper);
 
-    settingsSelectedRoom3D.addDropDown('Floor Textures', floor_texture_keys, selectFloorTexture);
-    settingsSelectedRoom3D.addImage('Floor Texture:', floor_textures[floor_texture_keys[0]].colormap || TEXTURE_NO_PREVIEW, null);
-    settingsSelectedRoom3D.addColor('Floor Texture Color:', floor_textures[floor_texture_keys[0]].color || '#FFFFFF', selectFloorTextureColor);
-    settingsSelectedRoom3D.addButton('Apply', selectFloorTexture);
+    // Floor textures with visual grid
+    settingsSelectedRoom3D.addTextureGrid('Floor Textures', floor_textures, (data) => {
+        selectFloorTexture(data);
+    });
+    settingsSelectedRoom3D.addColor('Floor Color Tint', floor_textures[floor_texture_keys[0]].color || '#FFFFFF', selectFloorTextureColor);
 
-    settingsSelectedRoom3D.addDropDown('All Wall Textures', wall_texture_keys, selectWallTexture);
-    settingsSelectedRoom3D.addImage('All Wall Texture:', wall_textures[wall_texture_keys[0]].colormap || TEXTURE_NO_PREVIEW, selectWallTexture);
-    settingsSelectedRoom3D.addColor('All Wall Texture Color:', wall_textures[wall_texture_keys[0]].color || '#FFFFFF', selectWallTextureColor);
-    settingsSelectedRoom3D.addButton('Apply', selectWallTexture);
+    // Wall textures for all walls in room
+    settingsSelectedRoom3D.addTextureGrid('Wall Textures (All)', wall_textures, (data) => {
+        selectWallTexture(data);
+    });
+    settingsSelectedRoom3D.addColor('Wall Color Tint', wall_textures[wall_texture_keys[0]].color || '#FFFFFF', selectWallTextureColor);
 
-    settingsSelectedWall3D.addDropDown('Wall Textures', wall_texture_keys, selectWallTexture);
-    settingsSelectedWall3D.addImage('Wall Texture:', wall_textures[wall_texture_keys[0]].colormap || TEXTURE_NO_PREVIEW, null);
-    settingsSelectedWall3D.addColor('Wall Texture Color:', wall_textures[wall_texture_keys[0]].color || '#FFFFFF', selectWallTextureColor);
-    settingsSelectedWall3D.addButton('Apply', selectWallTexture);
+    // Individual wall textures
+    settingsSelectedWall3D.addTextureGrid('Wall Texture', wall_textures, (data) => {
+        selectWallTexture(data);
+    });
+    settingsSelectedWall3D.addColor('Wall Color Tint', wall_textures[wall_texture_keys[0]].color || '#FFFFFF', selectWallTextureColor);
 
-    settingsSelectedWall3D.addDropDown('Select Door', doorTypes, selectDoorForWall);
-    settingsSelectedWall3D.addImage('Door Preview:', doorsData[doorTypes[0]].src, null);
-    settingsSelectedWall3D.addButton('Add', addDoorForWall);
+    settingsSelectedWall3D.addDropDown('Door Type', doorTypes, selectDoorForWall);
+    settingsSelectedWall3D.addImage('Door Preview', doorsData[doorTypes[0]].src, null);
+    settingsSelectedWall3D.addButton('Add Door', addDoorForWall);
 
-    settingsViewer3d.addHTML('Tips:', '<p>Click and drag to rotate the room in 360\xB0</p><p>Add room items <ul><li>Add parametric doors</li><li>Other items (Coming soon)</li></ul></p><p>Drag and Place items(pink boxes and parametric doors) in the room</p><p>There are 8 different types of items <ul><li>1: FloorItem</li> <li>2: WallItem</li> <li>3: InWallItem</li> <li>7: InWallFloorItem</li> <li>8: OnFloorItem</li> <li>9: WallFloorItem</li><li>0: Item</li> <li>4: RoofItem</li></ul></p>');
-
-
-    uxInterface.setWidth(panelWidths);
-    uxInterface.setHeight(uxInterfaceHeight);
+    settingsViewer3d.addHTML('3D Navigation', '<p><strong>Mouse Controls:</strong></p><p>• Click and drag to rotate view</p><p>• Scroll to zoom in/out</p><p>• Right-click and drag to pan</p><p><strong>Selection:</strong></p><p>• Click walls to select and modify</p><p>• Click rooms to change materials</p><p>• Drag items to reposition</p>');
 
 
     settingsViewer2d.hideControl('Delete');
-
-    settingsViewer2d.setWidth(panelWidths);
-    settingsViewer3d.setWidth(panelWidths);
-
-
-    settingsViewer2d.setHeight(subPanelsHeight);
-    settingsViewer3d.setHeight(subPanelsHeight);
-
-
-
-    uxInterface.setPosition(app_parent.clientWidth - panelWidths, startY);
-    settingsViewer2d.setPosition(app_parent.clientWidth - panelWidths, startY + uxInterfaceHeight);
-    settingsViewer3d.setPosition(app_parent.clientWidth - panelWidths, startY + uxInterfaceHeight);
 
 
     settingsSelectedCorner.hide();

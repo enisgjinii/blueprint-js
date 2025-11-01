@@ -1,18 +1,188 @@
-<!DOCTYPE html>
-<html>
+<!DOCTYPE html><html lang="en"><head>
+    <!-- Required meta tags -->
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
 
-<head>
-    <meta charset="UTF-8">
+    <!-- Inter Font -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;display=swap" rel="stylesheet">
+
     <title>Blueprint JS - Floorplan</title>
+
+    <style>* {
+  font-family: Inter, -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, sans-serif;
+}
+
+html, body {
+  background-color: #fff;
+  height: 100%;
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+}
+
+#bp3djs-viewer2d, #bp3djs-viewer3d {
+  background-color: #fafafa;
+  width: calc(100% - 320px);
+  height: calc(100vh - 60px);
+  position: absolute;
+  top: 60px;
+  left: 320px;
+}
+
+.navbar {
+  z-index: 999;
+  background-color: #fff;
+  border-bottom: 1px solid #e4e4e7;
+  justify-content: space-between;
+  align-items: center;
+  height: 60px;
+  padding: 0 24px;
+  display: flex;
+  position: fixed;
+  top: 0;
+  left: 320px;
+  right: 0;
+}
+
+.navbar-brand {
+  color: #09090b;
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.navbar-actions {
+  align-items: center;
+  gap: 12px;
+  display: flex;
+}
+
+.navbar-btn {
+  color: #09090b;
+  cursor: pointer;
+  background-color: #fff;
+  border: 1px solid #e4e4e7;
+  border-radius: 6px;
+  padding: 6px 12px;
+  font-size: 13px;
+  font-weight: 500;
+  transition: all .2s;
+}
+
+.navbar-btn:hover {
+  background-color: #f4f4f5;
+}
+
+.navbar-btn.primary {
+  color: #fff;
+  background-color: #09090b;
+  border-color: #09090b;
+}
+
+.navbar-btn.primary:hover {
+  background-color: #18181b;
+}
+
+.view-indicator {
+  color: #475569;
+  background-color: #f1f5f9;
+  border-radius: 4px;
+  padding: 4px 8px;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.sidebar {
+  z-index: 1000;
+  background-color: #fff;
+  border-right: 1px solid #e4e4e7;
+  width: 320px;
+  height: 100vh;
+  position: fixed;
+  top: 0;
+  left: 0;
+  overflow-y: auto;
+}
+
+.sidebar-header {
+  z-index: 10;
+  background-color: #fff;
+  border-bottom: 1px solid #e4e4e7;
+  padding: 24px 20px 16px;
+  position: sticky;
+  top: 0;
+}
+
+.sidebar-title {
+  color: #09090b;
+  margin: 0;
+  font-size: 18px;
+  font-weight: 600;
+}
+
+.sidebar-content {
+  padding: 16px;
+}
+
+.viewer3d-measurement-labels {
+  color: #fff;
+  background: #000c;
+  border-radius: 4px;
+  padding: 4px 8px;
+  font-family: Inter, sans-serif;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.sidebar::-webkit-scrollbar {
+  width: 6px;
+}
+
+.sidebar::-webkit-scrollbar-track {
+  background: #f1f5f9;
+}
+
+.sidebar::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 3px;
+}
+
+.sidebar::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
+}
+</style>
 </head>
 
 <body>
+    <div class="sidebar">
+        <div class="sidebar-header">
+            <h1 class="sidebar-title">Blueprint JS</h1>
+        </div>
+        <div class="sidebar-content">
+            <div id="main-controls"></div>
+            <div id="viewer-controls"></div>
+            <div id="selection-controls"></div>
+        </div>
+    </div>
+
+    <nav class="navbar">
+        <div class="navbar-brand">Floor Plan Designer</div>
+        <div class="navbar-actions">
+            <span id="current-view" class="view-indicator">Floor Planning</span>
+            <button id="switch-view-btn" class="navbar-btn primary">Switch to 3D</button>
+            <button id="save-btn" class="navbar-btn">Save</button>
+            <button id="export-btn" class="navbar-btn">Export</button>
+        </div>
+    </nav>
+
     <div id="bp3d-js-app">
         <div id="bp3djs-viewer2d"></div>
         <div id="bp3djs-viewer3d"></div>
     </div>
-    <link href="/index.cf673764.css" rel="stylesheet">
-    <script src="/index.0af55655.js" defer=""></script>
-</body>
 
-</html>
+    <script src="/blueprint-js-1.982d5ed5.js" type="module"></script>
+
+
+</body></html>
